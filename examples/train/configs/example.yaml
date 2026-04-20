@@ -25,6 +25,11 @@ models:
     disable_custom_init_weights: false                # default: false
     flow_shift: 3.0                                   # default: 3.0
     enable_gradient_checkpointing_type: null           # default: null (falls back to training.model)
+    # Optional LoRA finetuning. When lora_rank is set, the base transformer is
+    # frozen and only injected adapter weights are trainable.
+    # lora_rank: 32
+    # lora_alpha: 32
+    # lora_target_modules: [q_proj, k_proj, v_proj, o_proj]
 
   teacher:
     _target_: fastvideo.train.models.wan.WanModel

@@ -96,6 +96,60 @@ Key differences from full finetune:
 - Can run on fewer GPUs (even single GPU)
 - Outputs adapter weights instead of full model
 
+### YAML Minimal Example (`fastvideo/train/`)
+
+The modular YAML trainer also supports a minimal LoRA setup by adding LoRA
+fields under `models.student`:
+
+```yaml
+models:
+  student:
+    _target_: fastvideo.train.models.wan.WanModel
+    init_from: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+    trainable: true
+    lora_rank: 32
+    lora_alpha: 32
+
+training:
+  dit_precision: bf16  # optional: use bf16 master weights to lower VRAM
+```
+
+Ready-to-run examples:
+
+- `examples/train/configs/fine_tuning/wan/t2v_lora.yaml`
+- `examples/train/configs/fine_tuning/wan/ti2v_lora.yaml`
+- `examples/train/configs/fine_tuning/wan/fast_t2v_lora_vsa.yaml`
+- `examples/train/configs/fine_tuning/wan/fast_ti2v_fullattn_lora_vsa.yaml`
+- `examples/train/configs/fine_tuning/wan/turbo_t2v_lora_sla.yaml`
+- `examples/train/configs/fine_tuning/matrixgame/i2v_lora.yaml`
+- `examples/train/configs/fine_tuning/hunyuan/t2v_lora.yaml`
+- `examples/train/configs/fine_tuning/hunyuan/fast_t2v_lora.yaml`
+
+For support-matrix model IDs that share the same backbone, replace `init_from`
+with the corresponding Hugging Face model ID and keep the matching
+preprocessing/validation recipe for that workload. Wan I2V models require
+I2V-style parquet data (`clip_feature`, `first_frame_latent`) and an
+image-conditioned validation pipeline such as
+`fastvideo.pipelines.basic.wan.wan_i2v_pipeline.WanImageToVideoPipeline`.
+Wan2.2 TI2V 5B continues to use T2V-style preprocessed parquet data. For
+validation/inference in the new training stack, use
+`fastvideo.pipelines.basic.wan.wan_pipeline.WanPipeline`; the TI2V behavior is
+activated by the model's pipeline config (`ti2v_task=True`) and the provided
+`image_path`/`video_path`, so it does not require the I2V image encoder
+pipeline. FastWan checkpoints that target VSA should also set
+`training.vsa.sparsity` in the YAML so the training entrypoint selects the
+`VIDEO_SPARSE_ATTN` backend before loading the Wan transformer; when adapting
+VSA checkpoints, it is also reasonable to include `to_gate_compress` in
+`lora_target_modules`. TurboDiffusion/TurboWan checkpoints should use the
+`SLA_ATTN` backend; the new training entrypoint auto-selects it for model IDs
+containing `turbodiffusion` or `turbowan` unless you override the environment
+variable manually.
+MatrixGame 2.0 models share the same LoRA training path in the YAML trainer,
+but they require MatrixGame-preprocessed parquet data with action conditioning
+(`clip_feature`, `first_frame_latent`, `keyboard_cond`, `mouse_cond`) and a
+validation pipeline such as
+`fastvideo.pipelines.basic.matrixgame.matrixgame_i2v_pipeline.MatrixGamePipeline`.
+
 ## LoRA Extraction and Merging
 
 FastVideo provides tools to extract LoRA adapters from finetuned models and merge them back.

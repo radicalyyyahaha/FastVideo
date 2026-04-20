@@ -80,6 +80,28 @@ training:
     run_name: my_run
 ```
 
+## Excel Run Log
+
+If you want each training launch to append one row into an Excel tracker,
+set the workbook path before running `examples/train/run.sh`:
+
+```bash
+export TRAINING_RUN_LOG_XLSX=/absolute/path/to/training_run_log_template.xlsx
+export TRAINING_RUN_LOG_SHEET=训练记录   # optional, default is 训练记录
+export TRAINING_RUN_LOG_OWNER=$USER     # optional
+```
+
+Then launch training normally:
+
+```bash
+NUM_GPUS=1 bash examples/train/run.sh \
+    examples/train/configs/fine_tuning/wan/t2v_lora.yaml
+```
+
+The launcher will append a row after the run finishes, including config-derived
+fields such as model, resolution, batch size, LoRA rank, and runtime-derived
+fields such as status, wall time, GPU model, and final loss when available.
+
 ## Directory Layout
 
 ```

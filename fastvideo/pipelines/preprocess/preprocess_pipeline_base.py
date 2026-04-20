@@ -264,7 +264,7 @@ class BasePreprocessPipeline(ComposedPipelineBase):
             if data is None:
                 continue
 
-            with torch.inference_mode():
+            with torch.no_grad():
                 # Filter out invalid samples (those with all zeros)
                 valid_indices = []
                 for i, pixel_values in enumerate(data["pixel_values"]):
@@ -287,10 +287,23 @@ class BasePreprocessPipeline(ComposedPipelineBase):
                 if "action_path" in data:
                     valid_data["action_path"] = [data["action_path"][i] for i in valid_indices]
 
-                # VAE
-                with torch.autocast("cuda", dtype=torch.float32):
-                    latents = self.get_module("vae").encode(valid_data["pixel_values"].to(
-                        get_local_torch_device())).mean
+                # Keep inputs aligned with the actual VAE weight dtype.
+                vae = self.get_module("vae")
+                vae_device = get_local_torch_device()
+                vae_dtype = next(vae.parameters()).dtype
+                pixel_values = valid_data["pixel_values"].to(
+                    device=vae_device,
+                    dtype=vae_dtype,
+                )
+
+                if vae_device.type == "cuda" and vae_dtype in (
+                    torch.float16,
+                    torch.bfloat16,
+                ):
+                    with torch.autocast("cuda", dtype=vae_dtype):
+                        latents = vae.encode(pixel_values).mean
+                else:
+                    latents = vae.encode(pixel_values).mean
 
                 # Get extra features if needed
                 extra_features = self.get_extra_features(valid_data, fastvideo_args)
