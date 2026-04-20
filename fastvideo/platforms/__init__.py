@@ -69,7 +69,7 @@ def npu_platform_plugin() -> str | None:
 
     try:
         import torch
-        # 导入 torch_npu 以初始化 NPU 后端
+        # Import torch_npu to initialize the NPU backend.
         import torch_npu  # noqa: F401
         if torch.npu.is_available():
             is_npu = True

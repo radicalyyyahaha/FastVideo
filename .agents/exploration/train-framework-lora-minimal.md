@@ -3,59 +3,77 @@
 ## Status: under_review
 
 ## Context
-`fastvideo/train/` 是当前推荐的训练框架，但此前 LoRA 训练能力主要停留在
-`fastvideo/training/` 旧 pipeline 中。为了给 YAML 驱动的新框架补一个最小
-LoRA finetune 路径，这次实现重点放在 model plugin 侧的 LoRA 注入，而不是
-复制旧 pipeline 的整套训练逻辑。
+
+`fastvideo/train/` is the preferred YAML-driven training framework. Before this
+work, practical LoRA training support mostly lived in the legacy
+`fastvideo/training/` pipelines. The goal was to add a minimal LoRA finetuning
+path to the new framework by injecting LoRA layers inside model plugins, rather
+than copying entire legacy training pipelines.
 
 ## Progress
-- [x] 阅读训练框架、LoRA 推理层和旧训练 pipeline 的实现。
-- [x] 识别新框架缺口：缺少训练侧 LoRA 层注入入口。
-- [x] 在 `fastvideo/train/utils/lora.py` 中补充最小注入逻辑。
-- [x] 将 LoRA 参数接入 `WanModel` / `HunyuanModel` / `WanCausalModel`。
-- [x] 补充 YAML 最小示例和文档说明。
-- [x] 将 `WanModel` 的新训练栈从纯 T2V batch 扩到支持 I2V/TI2V parquet。
-- [x] 补充 `Wan2.2 TI2V 5B` 的最小 LoRA YAML 示例和轻量回归测试。
-- [x] 为 `Matrix-Game-2.0` family 补充新训练栈 model plugin、action-conditioned
-  validation 透传和 LoRA YAML 示例。
-- [x] 复核 `GEN3C-Cosmos-7B` 在当前仓库中的训练可行性，确认它仍停留在推理集成，
-  尚未接入 `fastvideo/train/` LoRA finetune 路径。
+
+- [x] Read the new training framework, inference-side LoRA layers, and legacy
+  training pipelines.
+- [x] Identified the missing piece in the new framework: no training-side LoRA
+  injection hook.
+- [x] Added minimal injection logic in `fastvideo/train/utils/lora.py`.
+- [x] Wired LoRA parameters into `WanModel`, `HunyuanModel`, and
+  `WanCausalModel`.
+- [x] Added minimal YAML examples and documentation.
+- [x] Extended the new `WanModel` training path from pure T2V batches to
+  I2V/TI2V-compatible parquet where appropriate.
+- [x] Added a minimal LoRA YAML example and lightweight tests for
+  `Wan2.2 TI2V 5B`.
+- [x] Added a `Matrix-Game-2.0` model plugin, action-conditioned validation
+  passthrough, and a LoRA YAML example for the new training stack.
+- [x] Reviewed `GEN3C-Cosmos-7B` and confirmed that the current repository only
+  provides inference integration for it. It is not wired into the
+  `fastvideo/train/` LoRA finetuning path.
 
 ## Findings
-- 推理侧 `LoRAPipeline` 已经具备可复用的 LoRA layer 封装，训练侧真正缺的是
-  “何时把 transformer 替换为 LoRA layer”。
-- 新框架的模型加载阶段已经完成 FSDP/HSDP 分片，因此新增的 LoRA 参数需要
-  显式包成 replicated DTensor，避免优化器和 checkpoint 语义不一致。
-- 对 `fastvideo/train/` 来说，把 LoRA 作为 `models.student` 的可选构造参数
-  最薄，也最不破坏当前配置结构。
-- `Wan-AI/Wan2.2-TI2V-5B-Diffusers` 和 `Wan-AI/Wan2.1-I2V-*` 不能混为一谈。
-  前者在仓库现成 distill 脚本里继续使用 T2V 风格 parquet 预处理；后者才需要
-  `clip_feature` / `first_frame_latent` 这类 I2V parquet 字段。
-- 旧的 `fastvideo/training/wan_i2v_training_pipeline.py` 适合迁移给 Wan I2V
-  family，但不应该直接套到 Wan2.2 TI2V 5B 上，否则会把 TI2V 错误地绑到
-  `image_encoder` 依赖上。
-- `MatrixGame` 在新训练栈里不是简单的 `Wan I2V` 变体。它除了
-  `clip_feature` / `first_frame_latent` 之外，还要求
-  `keyboard_cond` / `mouse_cond` 进入 transformer forward；因此最薄的迁移
-  方式是新增一个 `MatrixGameModel(WanModel)`，复用 Wan 的噪声调度和 LoRA
-  注入，但覆写 batch 组装和 validation action 透传。
-- `GEN3C-Cosmos-7B` 当前代码层面只完成了推理路径：`Gen3CPipeline` 依赖
-  `image_path`、MoGe 深度估计、3D cache 渲染、`condition_video_pose` /
-  `condition_video_input_mask` 这套专用 conditioning。虽然 transformer 内部
-  attention 命名（`to_q/to_k/to_v/to_out`）与训练侧 LoRA 匹配规则兼容，但
-  新训练栈缺少对应的 model plugin、parquet schema、preprocess/validation
-  数据链和训练 batch 组装，因此不能像 Wan/Hunyuan 那样只换 `init_from`
-  就跑通。
+
+- The inference-side `LoRAPipeline` already has reusable LoRA layer wrappers.
+  The missing training-side concept was when to replace transformer layers with
+  LoRA-wrapped layers.
+- The new framework loads and shards the transformer before the model plugin
+  returns it. Newly added LoRA parameters therefore need to be explicit
+  replicated DTensors so optimizer and checkpoint semantics remain consistent.
+- Adding LoRA as optional `models.student` constructor arguments is the thinnest
+  integration point for `fastvideo/train/`.
+- `Wan-AI/Wan2.2-TI2V-5B-Diffusers` should not be treated the same as
+  `Wan-AI/Wan2.1-I2V-*`. The former uses T2V-style parquet in the available
+  training path. The latter needs I2V fields such as `clip_feature` and
+  `first_frame_latent`.
+- The legacy `fastvideo/training/wan_i2v_training_pipeline.py` is useful
+  reference material for Wan I2V models, but it should not be applied directly
+  to Wan2.2 TI2V 5B because that incorrectly introduces an `image_encoder`
+  dependency.
+- `MatrixGame` is not just a plain Wan I2V variant. In addition to
+  `clip_feature` and `first_frame_latent`, it needs `keyboard_cond` and
+  `mouse_cond` in the transformer forward path. The thinnest migration is a
+  `MatrixGameModel(WanModel)` that reuses Wan scheduling and LoRA injection but
+  overrides batch preparation and validation action passthrough.
+- `GEN3C-Cosmos-7B` currently has inference-only plumbing. `Gen3CPipeline`
+  depends on `image_path`, MoGe depth estimation, 3D cache rendering,
+  `condition_video_pose`, and `condition_video_input_mask`. Its transformer
+  attention names (`to_q/to_k/to_v/to_out`) are compatible with the generic LoRA
+  target matcher, but the new training stack lacks the required model plugin,
+  parquet schema, preprocessing path, validation data path, and training batch
+  assembly.
 
 ## Mistakes / Dead Ends
-- 直接复用 `LoRAPipeline` 本身并不合适，因为它绑定了完整 pipeline 生命周期，
-  对新框架的 model plugin 来说过重。
-- 当前本地环境缺少完整测试依赖，只能做 `py_compile` 级别校验，无法在本地跑
-  真实训练或 pytest。
+
+- Reusing `LoRAPipeline` directly was too heavy. It is tied to full pipeline
+  lifecycle, while the new training stack needs a model-plugin-level hook.
+- The local environment did not include all test dependencies, so local
+  validation was limited to `py_compile` and YAML parsing rather than full
+  pytest or real training launches.
 
 ## Proposed Standardization
-- 如果后续需要推广到更多 backbone，可以把 `fastvideo/train/utils/lora.py`
-  提升为通用训练侧 LoRA 接口，并逐个补齐对应 model plugin（例如 Wan I2V、
-  MatrixGame、LongCat、GEN3C）。
-- 若需要产出可直接推理的 adapter，建议补一个 `fastvideo/train` 下的
-  DCP-to-LoRA 导出入口，而不是只依赖全量 diffusers 导出。
+
+- Promote `fastvideo/train/utils/lora.py` into the shared training-side LoRA
+  integration point as more backbones are added.
+- For future families, add one focused model plugin per distinct conditioning
+  contract rather than overloading `WanModel`.
+- Add a `fastvideo/train` export path from DCP checkpoints to standalone LoRA
+  adapters, instead of relying only on full Diffusers export.

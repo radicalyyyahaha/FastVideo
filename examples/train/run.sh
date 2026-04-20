@@ -106,7 +106,7 @@ if [[ -n "${TRAINING_RUN_LOG_XLSX:-}" ]]; then
     python scripts/training/append_run_log.py \
         --workbook "${TRAINING_RUN_LOG_XLSX}" \
         --record "${RECORD_JSON}" \
-        --sheet "${TRAINING_RUN_LOG_SHEET:-训练记录}" | tee -a "${LOG_FILE}"
+        --sheet "${TRAINING_RUN_LOG_SHEET:-train_log}" | tee -a "${LOG_FILE}"
 fi
 
 exit "${TRAIN_EXIT}"

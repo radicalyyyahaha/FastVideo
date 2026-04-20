@@ -87,7 +87,7 @@ set the workbook path before running `examples/train/run.sh`:
 
 ```bash
 export TRAINING_RUN_LOG_XLSX=/absolute/path/to/training_run_log_template.xlsx
-export TRAINING_RUN_LOG_SHEET=训练记录   # optional, default is 训练记录
+export TRAINING_RUN_LOG_SHEET=train_log # optional, default is train_log
 export TRAINING_RUN_LOG_OWNER=$USER     # optional
 ```
 

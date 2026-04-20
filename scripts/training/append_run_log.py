@@ -251,7 +251,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Append a run record to xlsx.")
     parser.add_argument("--workbook", required=True)
     parser.add_argument("--record", required=True)
-    parser.add_argument("--sheet", default="训练记录")
+    parser.add_argument("--sheet", default="train_log")
     args = parser.parse_args()
 
     workbook_path = Path(args.workbook)
